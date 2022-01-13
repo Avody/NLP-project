@@ -14,7 +14,6 @@ stopwords = nltk.corpus.stopwords.words('english')
 
 
 
-closed_class_categories = ['CD','CC','DT','EX','IN','LS','MD','PDT','POS','PRP','PRP$','RP','TO','UH','WDT','WP','WP$','WRB']
 
 
 def prettify(element,indent= ''):
