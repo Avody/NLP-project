@@ -11,11 +11,9 @@ from os.path import exists as file_exists
 import os 
 from nltk.corpus import stopwords
 stopwords = nltk.corpus.stopwords.words('english')
+from decimal import *
 
-
-
-
-
+#### a function taken from github to beautifully format xml file ####
 def prettify(element,indent= ''):
     queue = [(0,element)]
     while queue:
@@ -28,6 +26,18 @@ def prettify(element,indent= ''):
         else:
             element.tail = '\n' + indent * (level-1)
         queue[0:0] = children
+
+def jacc_similarity(vector1, vector2): 
+    jacc_num = 0 
+    jacc_den = 0 
+    for index in range(len(vector1)): 
+        if vector1[index] != 0 or vector2[index] != 0: 
+            jacc_den += max(vector1[index], vector2[index]) 
+            jacc_num += min(vector1[index], vector2[index]) 
+    if jacc_den == 0:
+        return 0
+    else:
+        return jacc_num / jacc_den
 
 
 
@@ -50,7 +60,7 @@ with os.scandir('C:/Users/odavr/OneDrive/Υπολογιστής/classify_article
                 with open(txt_file,'r',encoding="utf-8",errors='ignore') as text:
                     for str_text in text:
                         whole_text += str_text
-                if txt_count == 100: #taking 200 txts from each category
+                if txt_count == 200: #taking 200 txts from each category
                     break
         articles_n_vocabulary_train[line.name] = whole_text 
    
@@ -96,28 +106,24 @@ for turn in range(len(articles_n_vocabulary_train)):
           
     #remove stopwords
     no_stop_words_list = []
-    num_of_words = 0
+    
     
     
     for w in tokenized_words:
-        
-        
-        if w in stopwords:
-            
+        if w in stopwords:           
             continue
         else:
-            num_of_words+=1
             no_stop_words_list.append(w)
     
-    num_of_words_in_top_train[topics[turn]]=num_of_words #save the number of words, after excluding stopwords, for each article
+    
       
     ### remove punctuation
     symbols = "!\"#$%&()*+-,./:;<=>?@[\]^_`{|}~\n"
     for symbol in symbols:
-        no_stop_words_list = np.char.replace(no_stop_words_list,symbol,'')
+        no_stop_words_list = np.char.replace(no_stop_words_list,symbol,' ')
     
     ### remove apostrophe
-    no_stop_words_list = np.char.replace(no_stop_words_list, "'", " ")
+    no_stop_words_list = np.char.replace(no_stop_words_list, "'", "")
        
     ###remove single characters
 
@@ -146,7 +152,7 @@ for turn in range(len(articles_n_vocabulary_train)):
     #stemming words
     porter = PorterStemmer()
     stemmed_words_train = []
-    for jjword in no_stop_words_list_completed:
+    for jjword in clean_words_train:
         jjword = jjword.lower()
         stem = porter.stem(jjword)
         stemmed_words_train.append(stem)
@@ -156,10 +162,12 @@ for turn in range(len(articles_n_vocabulary_train)):
         sorted_list_train.append(i)
     sorted_list_train = sorted(sorted_list_train)
     
-        
-       
-     #inverted file creation
-    for word in stemmed_words_train:
+    num_of_words_in_top_train[topics[turn]]=len(sorted_list_train) #save the number of words, after excluding stopwords, for each article   
+    
+    
+    
+    #inverted file creation
+    for word in sorted_list_train:
         if word not in inverted_file_train:
             inverted_file_train[word] = tuple([[turn,1]])
         else:
@@ -275,50 +283,46 @@ print('Total time runned: {}'.format(end-start))
 
 #%% 
 
-"""
-READ 20newsgroups_inverted_index to extract the first 300 highest
-tf-idf weights for each topic in order to create the vector
-"""
 
 
 import xml.etree.ElementTree as ET
 mytree=ET.parse('20newsgroup_Inverted_Index_Train.xml')
 myroot = mytree.getroot()
 
-highest_200_tf_idf = {}
+ids_n_tfidf = {}
 
 for lemma in myroot.findall('lemma'):
     
     for doc in lemma:
-        if doc.attrib['id'] in highest_200_tf_idf:
-            highest_200_tf_idf[doc.attrib['id']] += [[lemma.attrib['name'],doc.attrib['TF-IDF']]]
+        if doc.attrib['id'] in ids_n_tfidf:
+            ids_n_tfidf[doc.attrib['id']] += [[lemma.attrib['name'],doc.attrib['TF-IDF']]]
         else:
-            highest_200_tf_idf[doc.attrib['id']] = [[lemma.attrib['name'],doc.attrib['TF-IDF']]]
+            ids_n_tfidf[doc.attrib['id']] = [[lemma.attrib['name'],doc.attrib['TF-IDF']]]
     
 
 
 words_and_tf_idf = {}
 
-for capa in highest_200_tf_idf:   #topic's level
+for capa in ids_n_tfidf:   #topic's level
     words_for_vector=[]
     list_to_sort = []
-    for i in highest_200_tf_idf[capa]:  # words in topics level
+    for i in ids_n_tfidf[capa]:  # words in topics level
         list_to_sort.append(i[1])       #store tf-idfs' weight
         
     tf_idf_sorted = sorted(list_to_sort)     #sort that list
     
-    top_values = tf_idf_sorted[-1:len(tf_idf_sorted)-300-1:-1]   #take the top values 
-    #precentage_ignored_20 = len(highest_200_tf_idf[capa]) * 0.20
-    #top_values = tf_idf_sorted[-int(precentage_ignored_20):len(tf_idf_sorted)-int(precentage_ignored_20)-400-1:-1]    # i ignore 25% from top weights
+    #top_values = tf_idf_sorted[-1:len(tf_idf_sorted)-400-1:-1]   #take the top values 
+    precentage_ignored_20 = len(ids_n_tfidf[capa]) * 0.20
+    top_values = tf_idf_sorted[-int(precentage_ignored_20):len(tf_idf_sorted)-int(precentage_ignored_20)-400-1:-1]    # i ignore 25% from top weights
     
     
     #process to find the word representing each value
     for big_val in top_values:                         #for every stored value          
         
-        for j in range(len(highest_200_tf_idf[capa])):     #for every pair word-weight
-            if highest_200_tf_idf[capa][j][1]==big_val:    
-                words_for_vector.append(highest_200_tf_idf[capa][j][0])
-                print(highest_200_tf_idf[capa].pop(j))
+        for j in range(len(ids_n_tfidf[capa])):     #for every pair word-weight
+            if ids_n_tfidf[capa][j][1]==big_val:    
+                words_for_vector.append(ids_n_tfidf[capa][j][0])
+                print(ids_n_tfidf[capa].pop(j))
                 break
                 
                 
@@ -356,7 +360,7 @@ for topicz in words_and_tf_idf:
             else:
                 tf=0
         
-        idf = math.log(1+20/(len(inverted_file_train[i])))
+        idf = math.log(1+20/(len(inverted_file_train[v_word])))
         tfidf_value=tf*idf
         
         vector_list.append(tfidf_value)
@@ -367,6 +371,16 @@ for topicz in words_and_tf_idf:
 
 #%% 
 
+
+
+
+
+
+
+
+
+
+#%%
 #### TRYING TO FIND THE VECTORS FOR EACH TEST ARTICLE ####
 
 ### Im gonna take 30 articles from each category ###
@@ -390,7 +404,7 @@ with os.scandir('C:/Users/odavr/OneDrive/Υπολογιστής/classify_article
                 except:
                     articles_n_vocabulary_test[line.name] = [whole_text]
             
-                if txt_count == 7:
+                if txt_count == 30:
                     break
 
 new_name_test = 0
@@ -502,36 +516,63 @@ for ttle in articles_n_vocabulary_test:
     print("{} DONE".format(ttle))  
     
 #%%
+from tqdm import tqdm
 
-from scipy.spatial import distance
 
-hand_categorized_articles = {}
+#Jaccard distance
 
-for title in vectors_n_articles: # from every topic
+#Jaccard Similarity
+
+hand_categorised_article_jaccard = {}
+hand_categorized_articles_jaccard = {}
+  
+for title in tqdm(vectors_n_articles): # from every topic
+    count_vec = 0 #count how many vectors has been classified
+    for vec in vectors_n_articles[title]: #we take a vector
+        count_vec+=1
+        last_jaccard_similarity = 0
+        
+        for topic in range(20):  # and it is compared with every other already classified vector 
+            vec_1 = np.array(vec)
+            vec_2 = np.array(vectors_n_topics['{}'.format(topic)])
+            
+            jaccard_similarity = jacc_similarity(vec_1,vec_2)
+            
+            #print("{}, {}: {:.20f} ".format(title,topic,cosine_similarity))
+            if jaccard_similarity >= last_jaccard_similarity:
+                hand_categorized_articles_jaccard.update({'{},{}'.format(title,count_vec):topics[int(topic)]})
+                last_jaccard_similarity = jaccard_similarity
+            
+#%%
+
+#Cosine Similarity
+
+hand_categorized_articles_cosine = {}
+
+for title in tqdm(vectors_n_articles): # from every topic
     count_vec = 0 #count how many vectors has been classified
     for vec in vectors_n_articles[title]: #we take a vector
         count_vec+=1
         last_cosine_similarity = 0
         for topic in range(20):  # and it is compared with every other already classified vector 
-            vec_1 = vec
-            vec_2 = vectors_n_topics['{}'.format(topic)]
+            vec_1 = np.array(vec)
+            vec_2 = np.array(vectors_n_topics['{}'.format(topic)])
             
-            cosine_similarity = 1 - distance.cosine(vec_1, vec_2)
+            numerator = np.dot(vec_1,vec_2)
+            denom = np.sqrt((sum(np.square(vec_1)))*np.sqrt(sum(np.square(vec_2))) )
+            
+            cosine_similarity = numerator/denom
             
             #print("{}, {}: {:.20f} ".format(title,topic,cosine_similarity))
             if cosine_similarity >= last_cosine_similarity:
-                hand_categorized_articles.update({'{},{}'.format(title,count_vec):topics[int(topic)]})
+                hand_categorized_articles_cosine.update({'{},{}'.format(title,count_vec):topics[int(topic)]})
                 last_cosine_similarity = cosine_similarity
-            else:
-                continue
-
-
-        
+            
 #%%
 
-for result in hand_categorized_articles:
-    success = 
-    if hand_categorized_articles[rusult] == result:
+
+
+
 
 
 
